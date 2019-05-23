@@ -119,7 +119,7 @@ static inline void soundOff(){
 }
 
 static void timerPoll(void) {
-    static uchar up;
+    static uchar up = 255;
     static uchar down;
 
     if(TIFR & (1 << TOV1)){
