@@ -111,6 +111,13 @@ static void typechar(char key) {
     *--nextDigit = key;
 }
 
+static inline void soundOn(){
+  TCCR0A = 0b00010010;
+}
+static inline void soundOff(){
+  TCCR0A = 0;
+}
+
 static void timerPoll(void) {
     static uchar up;
     static uchar down;
@@ -119,7 +126,7 @@ static void timerPoll(void) {
         TIFR = (1 << TOV1);  // clear overflow
 
         if(!(PINB & (1 << BIT_KEY))){ //key held
-            TCCR0B = 3; //Sound on
+            soundOn();
             if (down++ ==spacelength+dashlength) {
                 down=spacelength;
                 typechar(0x2A);
@@ -127,7 +134,7 @@ static void timerPoll(void) {
             }
             if (down<spacelength) up=0;
         } else if (down){
-            TCCR0B = 0; //Sound off
+            soundOff();
             if (symbol!=&symbolBuffer[sizeof(symbolBuffer)]){
                 if (down>=spacelength) {
                     *symbol=0;
@@ -140,7 +147,7 @@ static void timerPoll(void) {
             }
             down =0;
         } else {
-            TCCR0B = 0; //Sound off
+            soundOff();
             if (up++ ==255) up=255;
             if (up==1+dashlength) {
                 modifier=0;
@@ -319,8 +326,7 @@ static void timerPoll(void) {
 /* ------------------------------------------------------------------------- */
 
 static void timerInit(void) {
-    TCCR0A = 0b00010010;
-    TCCR0B = 0;
+    TCCR0B = 3;
     OCR0A = 64;
     TCCR1 = 0x0b;           /* select clock: 16.5M/1k -> overflow rate = 16.5M/256k = 62.94 Hz */
     modifier=0;
