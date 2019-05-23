@@ -23,6 +23,9 @@ PB0, PB2 = USB data lines
 #define BIT_PIEZO 1
 #define BIT_KEY 4
 
+// Adjust speed based on trimpot connected to reset pin -- remove this line to restore earlier behaviour
+#define USE_SPEED_CONTROL
+
 #define UTIL_BIN4(x)        (uchar)((0##x & 01000)/64 + (0##x & 0100)/16 + (0##x & 010)/4 + (0##x & 1))
 #define UTIL_BIN8(hi, lo)   (uchar)(UTIL_BIN4(hi) * 16 + UTIL_BIN4(lo))
 
@@ -32,8 +35,13 @@ PB0, PB2 = USB data lines
 
 /* ------------------------------------------------------------------------- */
 
-const uchar     dashlength  = 9;
-const uchar     spacelength = 45;   // longer for farnsworth pause
+#ifdef USE_SPEED_CONTROL
+  uchar         dashlength  = 9;
+  uchar         spacelength = 45;   // longer for farnsworth pause
+#else
+  const uchar   dashlength  = 9;
+  const uchar   spacelength = 45;   // longer for farnsworth pause
+#endif
 
 static uchar    reportBuffer[2];    // buffer for HID reports
 static uchar    idleRate;           // in 4 ms units
@@ -322,6 +330,28 @@ static void timerPoll(void) {
     }
 }
 
+#ifdef USE_SPEED_CONTROL
+  #define adc_startconversion() ADCSRA=(1<<ADEN|1<<ADSC|1<<ADIF|1<<ADPS2|1<<ADPS1|1<<ADPS0)
+  static void setSpeed(void){
+    static uint16_t oldreading = 0;
+    // Run if ADC is finished, but don't wait for it
+    if (ADCSRA & (1<<ADIF)) {
+      uint16_t reading = ADCW;
+      int16_t diff = oldreading - reading;
+      if (diff > 5 || diff < -5) {
+        oldreading = reading;
+
+        // Trimpot is 10K + 22K fixed, should range from VCC to (22/32)*VCC -> 703 to 1023.
+        reading -= 703;
+        reading >>= 2; // 0 to 80
+
+        spacelength = reading+20; //20 to 100
+        dashlength  = (reading>>3)+4; //4 to 14
+      }
+      adc_startconversion();
+    }
+  }
+#endif
 
 /* ------------------------------------------------------------------------- */
 
@@ -445,6 +475,10 @@ int main(void) {
     PORTB |= 1 << BIT_KEY;  /* pull-up on key input */
     wdt_enable(WDTO_1S);
     timerInit();
+    #ifdef USE_SPEED_CONTROL
+      ADMUX = 0; //(default) reset pin, VCC as reference
+      adc_startconversion();
+    #endif
     usbInit();
     sei();
     for(;;){    /* main event loop */
@@ -457,6 +491,9 @@ int main(void) {
                 nextDigit = NULL;
         }
         timerPoll();
+        #ifdef USE_SPEED_CONTROL
+          setSpeed();
+        #endif
     }
     return 0;
 }
